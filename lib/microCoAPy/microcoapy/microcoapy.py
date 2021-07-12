@@ -135,7 +135,6 @@ class Coap:
             optionBuffer = bytearray(2)
             optionBuffer[0] = (packet.observe & 0xFF00) >> 8
             optionBuffer[1] = (packet.observe & 0x00FF)
-            print("adding observe", packet.observe, optionBuffer)
             packet.addOption(
                 macros.COAP_OPTION_NUMBER.COAP_OBSERVE, optionBuffer)
 

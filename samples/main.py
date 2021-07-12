@@ -18,17 +18,23 @@ class GoliothClient:
         self.client.responseCallback = self.receivedMessageCallback
         self.host = host
         self.port = port
+
+        ai = socket.getaddrinfo(host, port)
+        addr = ai[0][-1]
+
+        self.serverIp = addr[0]
+        self.addr = addr
         self.dtlsSocket = DTLSSocket(
-            address=host, port=port, identity=identity, psk=psk)
+            address=addr, port=port, identity=identity, psk=psk)
         self.client.setCustomSocket(self.dtlsSocket)
 
     def lightdb_set(self, path, value, content_format=microcoapy.COAP_CONTENT_FORMAT.COAP_TEXT_PLAIN):
-        messageId = self.client.post(self.host, self.port, '.d/' + path, value,
+        messageId = self.client.post(self.serverIp, self.port, '.d/' + path, value,
                                      None, content_format)
         print("[LIGHTDB SET] Message Id: ", messageId)
 
     def lightdb_get(self, path):
-        messageId = self.client.get(self.host, self.port, '.d/' + path)
+        messageId = self.client.get(self.serverIp, self.port, '.d/' + path)
         print("[LIGHTDB GET] Message Id: ", messageId)
 
     def lightdb_observe(self, path):
@@ -38,9 +44,16 @@ class GoliothClient:
         print("[LIGHTDB OBSERVE] Message Id: ", messageId)
         self.observations[messageId] = full_path
 
+    def ota_observe(self):
+        full_path = '.u/desired'
+        messageId = self.client.get(
+            self.host, self.port, full_path, observe_option=0)
+        print("[OTA OBSERVE] Message Id: ", messageId)
+        self.observations[messageId] = full_path
+
     async def keepalive_task(self, pingPeriodMs=10_000):
         while True:
-            self.client.ping(self.host, self.port)
+            self.client.ping(self.serverIp, self.port)
             await uasyncio.sleep_ms(pingPeriodMs)
 
     async def poll_task(self, pollPeriodMs=500):
@@ -64,22 +77,25 @@ class GoliothClient:
 # DTLS socket implementation
 class DTLSSocket:
     def __init__(self, address, port, identity=None, psk=None):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind(('', port))
-        ai = socket.getaddrinfo(address, port)
-        addr = ai[0][-1]
-        self.addr = addr
+        self.addr = address
+        self.port = port
         self.identity = identity
         self.psk = psk
         self.connect()
 
     def connect(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind(('', self.port))
         self.sock.connect(self.addr)
         self.ssock = ssl.wrap_socket(
             self.sock, identity=self.identity, pre_shared_key=self.psk)
 
     def sendto(self, bytes, address):
-        return self.ssock.write(bytes)
+        try:
+            return self.ssock.write(bytes)
+        except:
+            self.connect()
+            return self.ssock.write(bytes)
 
     def recvfrom(self, bufsize):
         data = self.ssock.read(bufsize)
@@ -95,7 +111,6 @@ wlan.active(True)
 
 _MY_SSID = 'FullStackIoT'
 _MY_PASS = 'FullStackIoT'
-_SERVER_IP = '192.168.86.32'
 
 
 def connectToWiFi():
@@ -160,8 +175,12 @@ async def main(client):
 
 connectToWiFi()
 
+host = 'coap.golioth.dev'
+identity = 'YOUR_ID'
+psk = "YOUR_PSK"
+
 client = GoliothClient(
-    host=_SERVER_IP, identity="super-id", psk="anothersecret")
+    host=host, identity=identity, psk=psk)
 client.onMessage = onMessage
 
 uasyncio.run(main(client))
