@@ -9,9 +9,9 @@ Adding support for building IoT devices using Golioth and Micropython.
 
 We forked MicroPython to add support for DTLS.
 
-It's available on this fork/branch - https://github.com/golioth/micropython/tree/add-dtls-psk-support
+It's available on this fork/branch - https://github.com/goliothlabs/micropython/tree/add-dtls-psk-support
 
-[Follow the instructions](https://github.com/golioth/micropython/tree/add-dtls-psk-support/ports/esp32) to build for an esp32.
+[Follow the instructions](https://github.com/goliothlabs/micropython/tree/add-dtls-psk-support/ports/esp32) to build for an esp32.
 
 ### Install tools
 

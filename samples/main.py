@@ -5,7 +5,7 @@ import machine
 import microcoapy
 import usocket as socket
 import ussl as ssl
-from machine import Pin
+from machine import Pin, WDT
 
 
 class GoliothClient:
@@ -66,6 +66,7 @@ class GoliothClient:
             return
 
         if packet.payload == b'OK':
+            self.onMessage(packet, packet.payload, sender)
             return
 
         payloads = packet.payload.split(b'`')
@@ -81,9 +82,14 @@ class DTLSSocket:
         self.port = port
         self.identity = identity
         self.psk = psk
+        self.sock = None
+        self.ssock = None
         self.connect()
 
     def connect(self):
+        if self.sock is not None:
+            self.ssock.close()
+
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(('', self.port))
         self.sock.connect(self.addr)
@@ -98,8 +104,13 @@ class DTLSSocket:
             return self.ssock.write(bytes)
 
     def recvfrom(self, bufsize):
-        data = self.ssock.read(bufsize)
-        return (data, self.addr)
+        try:
+            data = self.ssock.read(bufsize)
+            return (data, self.addr)
+        except:
+            self.connect()
+            data = self.ssock.read(bufsize)
+            return (data, self.addr)
 
     def setblocking(self, flag):
         self.ssock.setblocking(flag)
@@ -114,16 +125,13 @@ _MY_PASS = 'FullStackIoT'
 
 
 def connectToWiFi():
-    nets = wlan.scan()
-    for net in nets:
-        ssid = net[0].decode("utf-8")
-        if ssid == _MY_SSID:
-            print('Network found!')
-            wlan.connect(ssid, _MY_PASS)
-            while not wlan.isconnected():
-                machine.idle()  # save power while waiting
-            print('WLAN connection succeeded!')
-            break
+    if wlan.isconnected():
+        return True
+
+    wlan.connect(_MY_SSID, _MY_PASS)
+    while not wlan.isconnected():
+        machine.idle()  # save power while waiting
+    print('WLAN connection succeeded!')
 
     return wlan.isconnected()
 
@@ -147,6 +155,11 @@ async def update_counter(client):
 
 def onMessage(packet, payload, sender):
     print('Message received:', packet.toString(), ', from: ', sender)
+
+    if payload == b'OK':
+        print('OK received')
+        return
+
     try:
         msg = ujson.loads(payload)
         i = 0
@@ -169,13 +182,17 @@ async def main(client):
     uasyncio.create_task(client.keepalive_task())
     uasyncio.create_task(client.poll_task())
     print("main tasks created")
+
+    wdt = WDT(timeout=30_000)  # enable it with a timeout of 30s
     while True:
-        await uasyncio.sleep_ms(100)
+        # connectToWiFi()
+        wdt.feed()
+        await uasyncio.sleep_ms(500)
 
 
 connectToWiFi()
 
-host = 'coap.golioth.dev'
+host = 'coap.golioth.io'
 identity = 'YOUR_ID'
 psk = "YOUR_PSK"
 
