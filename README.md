@@ -1,3 +1,5 @@
+> :warning: This project is considered experimental and is not recommended for production use. Functionality may break at any time.
+
 # Golioth SDK for MicroPython
 
 Adding support for building IoT devices using Golioth and Micropython.
